@@ -1,0 +1,12 @@
+#!/bin/sh
+
+echo DUAL_CAMERA_SCRIPT is run
+
+chmod 777 /home/root/debug/dual_camera
+
+/etc/init.d/weston stop
+sleep 1
+
+echo 0 > /sys/class/graphics/fbcon/cursor_blink
+
+sleep 1
