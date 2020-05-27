@@ -591,6 +591,8 @@ void drm_add_plane_property(struct drm_device_info *dev, drmModeAtomicReqPtr req
 		add_property(dev->fd, req, props, plane_id, "SRC_W", v4l2_device->width << 16);
 		add_property(dev->fd, req, props, plane_id, "SRC_H", v4l2_device->height << 16);
 		add_property(dev->fd, req, props, plane_id, "zorder", zorder_val++);
+		//Set global_alpha value if needed
+		add_property(dev->fd, req, props, plane_id, "global_alpha", 150);
 	}
 }
 
@@ -785,6 +787,7 @@ static int drm_init_dss(void)
 	* Dual camera demo is supported on Am437x and AM57xx evm. Find which
 	* specific SoC the demo is running to set the trans key mode -
 	* found at the corresponding TRM, for example,
+	* trans_key_mode = 0 -> transparency is disabled
 	* For AM437x: trans_key_mode = 1 GFX Dest Trans
 	*             TransKey applies to GFX overlay, marking which
 	*              pixels come from VID overlays)
@@ -821,9 +824,15 @@ static int drm_init_dss(void)
 	add_property(drm_device.fd, req, props, drm_device.crtc_id,
 		"trans-key-mode", trans_key_mode);
 	add_property(drm_device.fd, req, props, drm_device.crtc_id,
-		"alpha_blender", 1);
+		"trans-key", 0); //set transparency value to black
 	add_property(drm_device.fd, req, props, drm_device.crtc_id,
-		"zorder", MAX_ZORDER_VAL);
+		"background", 0); //set background value to black
+
+
+	add_property(drm_device.fd, req, props, drm_device.crtc_id,
+		"alpha_blender", 0);
+	add_property(drm_device.fd, req, props, drm_device.crtc_id,
+		"zorder", 0);
 
 	/* Set overlay plane properties like zorder, crtc_id, buf_id, src and */
 	/* dst w, h etc                                                       */
@@ -840,8 +849,6 @@ static int drm_init_dss(void)
 	}
 
 	drmModeAtomicFree(req);
-
-	MSG("#######2");
 	return 0;
 }
 
@@ -930,40 +937,6 @@ static int capture_frame(struct v4l2_device_info *v4l2_device,
 #endif //USE_CMEM_BUF
 
 
-	//+++ возвращение на полный экран ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-	drmModeAtomicReqPtr req = drmModeAtomicAlloc();
-
-
-	unsigned int plane_id = drm_device.plane_id[0];
-	drmModeObjectProperties * props = drmModeObjectGetProperties(drm_device.fd, plane_id,
-				DRM_MODE_OBJECT_PLANE);
-
-	if(props == NULL){
-		ERROR("drm obeject properties for plane type is NULL\n");
-		exit (-1);
-	}
-
-	unsigned int crtc_w_val = drm_device.width - 60;
-	unsigned int crtc_h_val = drm_device.height - 60;
-
-
-	add_property(drm_device.fd, req, props, plane_id, "CRTC_X", 30);
-	add_property(drm_device.fd, req, props, plane_id, "CRTC_Y", 30);
-	add_property(drm_device.fd, req, props, plane_id, "CRTC_W", crtc_w_val);
-	add_property(drm_device.fd, req, props, plane_id, "CRTC_H", crtc_h_val);
-
-	//Commit all the added properties
-	int	ret = drmModeAtomicCommit(drm_device.fd, req, DRM_MODE_ATOMIC_TEST_ONLY, 0);
-	if(!ret){
-		drmModeAtomicCommit(drm_device.fd, req, 0, 0);
-	}
-	else{
-		ERROR("ret from drmModeAtomicCommit = %d\n", ret);
-		return -1;
-	}
-
-	drmModeAtomicFree(req);
-	//+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 	return 0;
 }
