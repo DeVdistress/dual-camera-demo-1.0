@@ -38,23 +38,13 @@
 #define PAGE_SHIFT 12
 #define NBUF (3)
 #define MAX_DRM_PLANES 5
-#if(0)
-	// for kit's video cam
-	#define CAP_WIDTH 800
-	#define CAP_HEIGHT 600
-#else
-	// for brd or bkoi
-	#define CAP_WIDTH 704
-	#define CAP_HEIGHT 280
-#endif
-#define PIP_POS_X  25
-#define PIP_POS_Y  25
 #define MAX_ZORDER_VAL 3 //For AM57x device, max zoder value is 3
 
 struct control status;
 
 
-struct dmabuf_buffer {
+struct dmabuf_buffer
+{
 	uint32_t fourcc, width, height;
 	int nbo;
 	void *cmem_buf;
@@ -64,7 +54,8 @@ struct dmabuf_buffer {
 	unsigned fb_id;
 };
 
-struct connector_info {
+struct connector_info
+{
 	unsigned int id;
 	char mode_str[64];
 	drmModeModeInfo *mode;
@@ -84,10 +75,10 @@ struct drm_device_info
 	char dev_name[9];
 	char name[4];
 	unsigned int bo_flags;
-	struct dmabuf_buffer **buf[2];
+	struct dmabuf_buffer **buf[MAX_DRM_PLANES-1];
 	struct omap_device *dev;
 	unsigned int crtc_id;
-	unsigned int plane_id[2];
+	unsigned int plane_id[MAX_DRM_PLANES-1];
 	unsigned int prop_fbid;
 	unsigned int prop_crtcid;
 	uint64_t zorder_val_primary_plane;
@@ -98,7 +89,8 @@ struct drm_device_info
 /*
 * V4L2 capture device structure declaration
 */
-struct v4l2_device_info {
+struct v4l2_device_info
+{
 	int type;
 	int fd;
 	enum v4l2_memory memory_mode;
@@ -111,7 +103,9 @@ struct v4l2_device_info {
 	struct v4l2_buffer *buf;
 	struct v4l2_format fmt;
 	struct dmabuf_buffer **buffers;
-} cap0_device, cap1_device;
+} cap0_device, cap1_device, cap2_device, cap3_device;
+
+struct v4l2_device_info* mas_of_cap_device[NUM_OF_CAMS] = { &cap0_device, &cap1_device, &cap2_device, &cap3_device };
 
 /* If the use case need the buffer to be accessed by CPU for some processings,
  * then CMEM buffer can be used as they support cache operations by CPU. 
@@ -749,7 +743,7 @@ static int drm_init_device(struct drm_device_info *device)
 	status.display_xres = device->width;
 	status.display_yres = device->height;
 
-	drm_reserve_plane(device->fd, device->plane_id, status.num_cams);
+	drm_reserve_plane(device->fd, device->plane_id, NUM_OF_CAMS); //status.num_cams);
 
 	return 0;
 }

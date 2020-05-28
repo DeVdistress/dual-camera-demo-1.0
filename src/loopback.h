@@ -5,7 +5,34 @@
 extern "C" {
 #endif
 
-struct control {
+#if(0)
+	// for kit's video cam
+	// #ifndef CAP_WIDTH
+	// 		#define CAP_WIDTH 800
+	// #endif
+	// #ifndef CAP_HEIGHT
+	// 		#define CAP_HEIGHT 600
+	// #endif
+#else
+	// for brd or bkoi
+	#ifndef CAP_WIDTH
+		#define CAP_WIDTH 704
+	#endif
+	#ifndef CAP_HEIGHT
+		#define CAP_HEIGHT 280
+	#endif
+#endif
+#ifndef PIP_POS_X
+	#define PIP_POS_X  25
+#endif
+#ifndef PIP_POS_Y
+	#define PIP_POS_Y  25
+#endif
+
+#define NUM_OF_CAMS 			(4)
+
+struct control
+{
     unsigned int main_cam;
     unsigned int num_cams;
     unsigned int num_jpeg;
