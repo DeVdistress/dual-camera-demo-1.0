@@ -935,10 +935,9 @@ static int capture_frame(struct v4l2_device_info *v4l2_device,
 	return 0;
 }
 
-/*
-* Initialize the app resources with default parameters
-*/
-void default_parameters(void)
+
+// Initialize the app resources with default parameters
+void default_parameters(const int num_of_cam, struct v4l2_device_info** mas_of_cap_device)
 {
 	/* Main camera display */
 	memset(&drm_device, 0, sizeof(drm_device));
@@ -949,34 +948,50 @@ void default_parameters(void)
 	drm_device.bo_flags = OMAP_BO_SCANOUT;
 	drm_device.fd = 0;
 
-	/* Main camera */
-	cap0_device.memory_mode = V4L2_MEMORY_DMABUF;
-	cap0_device.num_buffers = NBUF;
-	strcpy(cap0_device.dev_name,"/dev/video1");
-	strcpy(cap0_device.name,"Capture 0");
-	cap0_device.buffers = NULL;
-	cap0_device.fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_YUYV;
-	cap0_device.width = CAP_WIDTH;
-	cap0_device.height = CAP_HEIGHT;
+	for(int i = 0; i<num_of_cam; ++i)
+	{
 
-	/* PiP camera */
-	cap1_device.memory_mode = V4L2_MEMORY_DMABUF;
-	cap1_device.num_buffers = NBUF;
-	strcpy(cap1_device.dev_name,"/dev/video2");
-	strcpy(cap1_device.name,"Capture 1");
-	cap1_device.buffers = NULL;
-	cap1_device.fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_YUYV;
-	cap1_device.width = CAP_WIDTH;
-	cap1_device.height = CAP_HEIGHT;
+		mas_of_cap_device[i]->memory_mode = V4L2_MEMORY_DMABUF;
+		mas_of_cap_device[i]->num_buffers = NBUF;
+		mas_of_cap_device[i]->buffers = NULL;
+		mas_of_cap_device[i]->fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_YUYV;
+		mas_of_cap_device[i]->width = CAP_WIDTH;
+		mas_of_cap_device[i]->height = CAP_HEIGHT;
+
+		switch(i)
+		{
+			case 0:// Main camera
+				strcpy(cap0_device.dev_name,"/dev/video1");
+				strcpy(cap0_device.name,"Capture 0");
+				break;
+
+			case 1:// PiP camera 1
+				strcpy(cap1_device.dev_name,"/dev/video2");
+				strcpy(cap1_device.name,"Capture 1");
+				break;
+
+			case 2:// PiP camera 2
+				strcpy(cap2_device.dev_name,"/dev/video3");
+				strcpy(cap2_device.name,"Capture 2");
+				break;
+
+			case 3:// PiP camera 3
+				strcpy(cap3_device.dev_name,"/dev/video4");
+				strcpy(cap3_device.name,"Capture 3");
+				break;
+		}
+	}
 
 	/* Set the default parameters for device options */
 	status.main_cam=0;
-	status.num_cams=2;
+	status.num_cams=num_of_cam;
 	status.num_jpeg=0;
-	if(status.num_cams == 1){
+	if(status.num_cams == 1)
+	{
 		status.pip=false;
 	}
-	else{
+	else
+	{
 		status.pip=true;
 	}
 	status.jpeg=false;
@@ -1044,11 +1059,12 @@ void set_plane_properties()
 */
 int init_loopback(void)
 {
+	bool status_cam[NUM_OF_CAMS] = { false, false, false, false };
 	bool status_cam0 = 0;
 	bool status_cam1 = 0;
 
-	/* Declare properties for video and capture devices */
-	default_parameters();
+	// Declare properties for video and capture devices
+	default_parameters(2/*NUM_OF_CAMS*/, mas_of_cap_device);
 
 	if(status.use_cmem){
 		init_cmem();
