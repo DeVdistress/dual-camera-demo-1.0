@@ -834,10 +834,12 @@ static int drm_init_dss(void)
 
 	//Commit all the added properties
 	ret = drmModeAtomicCommit(drm_device.fd, req, DRM_MODE_ATOMIC_TEST_ONLY, 0);
-	if(!ret){
+	if(!ret)
+	{
 		drmModeAtomicCommit(drm_device.fd, req, 0, 0);
 	}
-	else{
+	else
+	{
 		ERROR("ret from drmModeAtomicCommit = %d\n", ret);
 		return -1;
 	}
@@ -1060,8 +1062,6 @@ void set_plane_properties()
 int init_loopback(void)
 {
 	bool status_cam[NUM_OF_CAMS] = { false, false, false, false };
-	bool status_cam0 = 0;
-	bool status_cam1 = 0;
 
 	// Declare properties for video and capture devices
 	default_parameters(2/*NUM_OF_CAMS*/, mas_of_cap_device);
@@ -1070,95 +1070,62 @@ int init_loopback(void)
 		init_cmem();
 	}
 
-	/* Initialize the drm display devic */
+	// Initialize the drm display devic
 	if (drm_init_device(&drm_device)) goto Error;
 
-	/* Check to see if the display resolution is very small.  If so, the
-	* camera capture resolution needs to be lowered so that the scaling
-	* limits of the DSS are not reached */
-	if (drm_device.width < 640) {
-		/* Set capture 0 device resolution */
-		cap0_device.width = 640;
-		cap0_device.height = 480;
-
-		/* Set capture 1 device resolution */
-		cap1_device.width = 640;
-		cap1_device.height = 480;
-	}
-
-	/* Initialize the v4l2 capture devices */
-	if (v4l2_init_device(&cap0_device) < 0) {
-		printf("first camera detection failed\n");
-		/* If there is not a second camera, program can still continue */
-		status.num_cams=1;
-		status.main_cam=1;
-		status.pip=false;
-	}
-	else{
-		unsigned int i;
-		struct dmabuf_buffer **buffers = get_vid_buffers(&drm_device, cap0_device.num_buffers, 
-			cap0_device.fmt.fmt.pix.pixelformat, cap0_device.width, cap0_device.height);
-
-		if (!buffers) {
-			goto Error;
-		}
-
-		drm_device.buf[0] = buffers;
-
-		/* Pass these buffers to the capture drivers */
-		if (v4l2_request_buffer(&cap0_device, buffers) < 0) {
-			goto Error;
-		}
-
-		for (i = 0; i < cap0_device.num_buffers; i++) {
-			v4l2_queue_buffer(&cap0_device, buffers[i]);
-		}
-
-		status_cam0 = 1;
-	}
-
-	if(v4l2_init_device(&cap1_device) < 0) {
-		/* If there is not a second camera, program can still continue */
-		if(status.num_cams ==2){
-			status.num_cams=1;
-			status.pip=false;
-			printf("Only one camera detected\n");
-		}
-		//first camera wasn't detected
-		else if (!status_cam0){
-			printf("No camera detected\n");
-			goto Error;
+	// Check to see if the display resolution is very small.  If so, the
+	// camera capture resolution needs to be lowered so that the scaling
+	// limits of the DSS are not reached
+	if (drm_device.width < 640)
+	{
+		for (int i = 0; i<NUM_OF_CAMS; ++i)
+		{
+			// Set capture 0 device resolution
+			mas_of_cap_device[i]->width = 640;
+			mas_of_cap_device[i]->height = 480;
 		}
 	}
-	else{
-		unsigned int i;
-		struct dmabuf_buffer **buffers = get_vid_buffers(&drm_device, cap1_device.num_buffers, 
-			cap1_device.fmt.fmt.pix.pixelformat, cap1_device.width, cap1_device.height);
-		if (!buffers) {
-			goto Error;
+
+	//Init of cap_device
+	for (int i = 0; i<NUM_OF_CAMS; ++i)
+	{
+		if (v4l2_init_device(mas_of_cap_device[i]) < 0)
+		{
+			printf("first camera detection failed\n");
+		}
+		else
+		{
+			struct dmabuf_buffer **buffers = get_vid_buffers(&drm_device,
+															mas_of_cap_device[i]->num_buffers,
+															mas_of_cap_device[i]->fmt.fmt.pix.pixelformat,
+															mas_of_cap_device[i]->width,
+															mas_of_cap_device[i]->height);
+			if (!buffers)
+			{
+				goto Error;
+			}
+
+			drm_device.buf[i] = buffers;
+
+			// Pass these buffers to the capture drivers */
+			if (v4l2_request_buffer(mas_of_cap_device[i], buffers) < 0)
+			{
+				goto Error;
+			}
+
+			for (unsigned int tik = 0; tik < mas_of_cap_device[i]->num_buffers; ++tik)
+			{
+				v4l2_queue_buffer(mas_of_cap_device[i], buffers[tik]);
+			}
+
+			status_cam[i] = 1;
 		}
 
-		drm_device.buf[1] = buffers;
-
-		/* Pass these buffers to the capture drivers */
-		if (v4l2_request_buffer(&cap1_device, buffers) < 0) {
-			goto Error;
+		// Enable streaming for the v4l2 capture devices
+		if(status_cam[i])
+		{
+			if (v4l2_stream_on(mas_of_cap_device[i]) < 0) goto Error;
 		}
-
-		for (i = 0; i < cap1_device.num_buffers; i++) {
-			v4l2_queue_buffer(&cap1_device, buffers[i]);
-		}
-
-		status_cam1 = 1;
-	}
-
-	/* Enable streaming for the v4l2 capture devices */
-	if(status_cam0){
-		if (v4l2_stream_on(&cap0_device) < 0) goto Error;
-	}
-
-	if (status_cam1) {
-		if (v4l2_stream_on(&cap1_device) < 0) goto Error;
 	}
 
 	/* Configure the DSS to blend video and graphics layers */
