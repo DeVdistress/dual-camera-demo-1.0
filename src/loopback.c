@@ -37,8 +37,6 @@
 
 #define PAGE_SHIFT 12
 #define NBUF (3)
-#define MAX_DRM_PLANES 5
-#define MAX_ZORDER_VAL 3 //For AM57x device, max zoder value is 3
 
 struct control status;
 
@@ -520,7 +518,6 @@ void add_property(int fd, drmModeAtomicReqPtr req,
 
 void drm_add_plane_property(struct drm_device_info *dev, drmModeAtomicReqPtr req)
 {
-	unsigned int i;
 	unsigned int crtc_x_val = 0;
 	unsigned int crtc_y_val = 0;
 	unsigned int crtc_w_val = dev->width;
@@ -530,19 +527,38 @@ void drm_add_plane_property(struct drm_device_info *dev, drmModeAtomicReqPtr req
 	unsigned int buf_index;
 	struct v4l2_device_info  *v4l2_device;
 
-	for(i = 0; i < status.num_cams; i++){
+	for(unsigned int i = 0; i < MAX_NUMBER_OF_OVERLAY; ++i) // status.num_cams; ++i)
+	{
 		unsigned int plane_id = dev->plane_id[i];
 
-		if(i) {
-			crtc_x_val = PIP_POS_X;
-			crtc_y_val = PIP_POS_Y;
-			crtc_w_val /= 3;
-			crtc_h_val /= 3;
-		}
-		props = drmModeObjectGetProperties(dev->fd, plane_id,
-			DRM_MODE_OBJECT_PLANE);
+		switch(i)
+		{
+			case 1:
+				crtc_x_val = PIP_POS_X;
+				crtc_y_val = PIP_POS_Y;
+				crtc_w_val = dev->width/3;
+				crtc_h_val = dev->height/3;
+				break;
 
-		if(props == NULL){
+			case 2:
+				crtc_x_val = status.display_xres - status.display_xres/3 - PIP_POS_X;
+				crtc_y_val = PIP_POS_Y;
+				crtc_w_val = dev->width/3;
+				crtc_h_val = dev->height/3;
+				break;
+
+			case 3:
+				crtc_x_val = PIP_POS_X;
+				crtc_y_val = status.display_yres/3 + PIP_POS_Y - 2;
+				crtc_w_val = dev->width/3;
+				crtc_h_val = dev->height/3;
+				break;
+		}
+
+		props = drmModeObjectGetProperties(dev->fd, plane_id, DRM_MODE_OBJECT_PLANE);
+
+		if(props == NULL)
+		{
 			ERROR("drm obeject properties for plane type is NULL\n");
 			exit (-1);
 		}
@@ -557,19 +573,15 @@ void drm_add_plane_property(struct drm_device_info *dev, drmModeAtomicReqPtr req
 		drm_device.zorder_val[i] = get_drm_prop_val(drm_device.fd, props, "zorder");
 
 		//Set the fb id based on which camera is chosen to be main camera 
-		if (status.main_cam  == 1){
-			buf_index = (i+1)%2;
-		}
-		else {
+		if (status.main_cam  == 1 && i == 0)
+			buf_index = 1;
+		else if (status.main_cam  == 1 && i == 1)
+			buf_index = 0;
+		else
 			buf_index = i;
-		}
 
-		if(buf_index == 0){
-			v4l2_device = &cap0_device;
-		}
-		else{
-			v4l2_device = &cap1_device;
-		}
+		v4l2_device = mas_of_cap_device[i];
+
 		printf("w=%d, h=%d\n", v4l2_device->width, v4l2_device->height);
 		add_property(dev->fd, req, props, plane_id, "FB_ID", dev->buf[buf_index][0]->fb_id);
 
@@ -600,7 +612,8 @@ uint32_t drm_reserve_plane(int fd, unsigned int *ptr_plane_id, int num_planes)
 		ERROR("plane resources not found\n");
 	}
 
-	for (i = 0; i < res->count_planes; i++) {
+	for (i = 0; i < res->count_planes; i++)
+	{
 		uint32_t plane_id = res->planes[i];
 		unsigned int type_val;
 
@@ -611,13 +624,15 @@ uint32_t drm_reserve_plane(int fd, unsigned int *ptr_plane_id, int num_planes)
 
 		props = drmModeObjectGetProperties(fd, plane->plane_id, DRM_MODE_OBJECT_PLANE);
 
-		if(props == NULL){
+		if(props == NULL)
+		{
 			ERROR("plane (%d) properties not found\n",  plane->plane_id);
 		}
 
 		type_val = get_drm_prop_val(fd, props, "type");
 
-		if(type_val == DRM_PLANE_TYPE_OVERLAY){
+		if(type_val == DRM_PLANE_TYPE_OVERLAY)
+		{
 			ptr_plane_id[idx++] = plane_id;
 		}
 
@@ -743,7 +758,7 @@ static int drm_init_device(struct drm_device_info *device)
 	status.display_xres = device->width;
 	status.display_yres = device->height;
 
-	drm_reserve_plane(device->fd, device->plane_id, NUM_OF_CAMS); //status.num_cams);
+	drm_reserve_plane(device->fd, device->plane_id, MAX_NUMBER_OF_OVERLAY); //status.num_cams);
 
 	return 0;
 }
@@ -857,20 +872,21 @@ void drm_disable_pip(void)
 	int ret;
 	drmModeAtomicReqPtr req = drmModeAtomicAlloc();
 
-	drmModeAtomicAddProperty(req, drm_device.plane_id[1],
-		drm_device.prop_fbid, 0);
-	drmModeAtomicAddProperty(req, drm_device.plane_id[1],
-		drm_device.prop_crtcid, 0);
+	drmModeAtomicAddProperty(req, drm_device.plane_id[1],drm_device.prop_fbid, 0);
+	drmModeAtomicAddProperty(req, drm_device.plane_id[1],drm_device.prop_crtcid, 0);
 
-	ret = drmModeAtomicCommit(drm_device.fd, req,
-		DRM_MODE_ATOMIC_TEST_ONLY, 0);
-	if(!ret){
-		drmModeAtomicCommit(drm_device.fd, req,
-			0, 0);
+	drmModeAtomicAddProperty(req, drm_device.plane_id[2], drm_device.prop_fbid, 0);
+	drmModeAtomicAddProperty(req, drm_device.plane_id[2], drm_device.prop_crtcid, 0);
+
+	ret = drmModeAtomicCommit(drm_device.fd, req, DRM_MODE_ATOMIC_TEST_ONLY, 0);
+
+	if(!ret)
+	{
+		drmModeAtomicCommit(drm_device.fd, req, 0, 0);
 	}
-	else{
-		ERROR("failed to enable plane %d atomically: %s",
-			drm_device.plane_id[!status.main_cam], strerror(errno));
+	else
+	{
+		ERROR("failed to enable plane %d atomically: %s", drm_device.plane_id[!status.main_cam], strerror(errno));
 	}
 
 	drmModeAtomicFree(req);
@@ -882,18 +898,20 @@ void drm_enable_pip(void)
 
 	drmModeAtomicReqPtr req = drmModeAtomicAlloc();
 
-	drmModeAtomicAddProperty(req, drm_device.plane_id[1],
-		drm_device.prop_fbid, drm_device.buf[!status.main_cam][0]->fb_id);
-	drmModeAtomicAddProperty(req, drm_device.plane_id[1],
-		drm_device.prop_crtcid, drm_device.crtc_id);
+	drmModeAtomicAddProperty(req, drm_device.plane_id[1], drm_device.prop_fbid, drm_device.buf[!status.main_cam][0]->fb_id);
+	drmModeAtomicAddProperty(req, drm_device.plane_id[1], drm_device.prop_crtcid, drm_device.crtc_id);
 
-	ret = drmModeAtomicCommit(drm_device.fd, req,
-		DRM_MODE_ATOMIC_TEST_ONLY, 0);
+	drmModeAtomicAddProperty(req, drm_device.plane_id[2], drm_device.prop_fbid,   drm_device.buf[!status.main_cam][0]->fb_id);
+	drmModeAtomicAddProperty(req, drm_device.plane_id[2], drm_device.prop_crtcid, drm_device.crtc_id);
 
-	if(!ret){
+	ret = drmModeAtomicCommit(drm_device.fd, req, DRM_MODE_ATOMIC_TEST_ONLY, 0);
+
+	if(!ret)
+	{
 		drmModeAtomicCommit(drm_device.fd, req, 0, 0);
 	}
-	else{
+	else
+	{
 		ERROR("failed to enable plane %d atomically: %s",
 			drm_device.plane_id[!status.main_cam], strerror(errno));
 	}
@@ -1064,7 +1082,7 @@ int init_loopback(void)
 	bool status_cam[NUM_OF_CAMS] = { false, false, false, false };
 
 	// Declare properties for video and capture devices
-	default_parameters(2/*NUM_OF_CAMS*/, mas_of_cap_device);
+	default_parameters(NUM_OF_CAMS, mas_of_cap_device);
 
 	if(status.use_cmem){
 		init_cmem();
@@ -1128,7 +1146,7 @@ int init_loopback(void)
 		}
 	}
 
-	/* Configure the DSS to blend video and graphics layers */
+	// Configure the DSS to blend video and graphics layers
 	if (drm_init_dss() < 0 ) goto Error;
 
 	return 0;
@@ -1159,47 +1177,47 @@ void process_frame(void)
 {
 	fd_set fds;
 	int ret, waiting_for_flip = 1;
-	struct dmabuf_buffer *buf[2] = {NULL, NULL};
+	struct dmabuf_buffer *buf[NUM_OF_CAMS] = {NULL, NULL, NULL, NULL};
 	drmModeAtomicReqPtr req = drmModeAtomicAlloc();
 
-	struct v4l2_device_info *v4l2_device[2] =
-	{&cap0_device, &cap1_device};
+	struct v4l2_device_info **v4l2_device = mas_of_cap_device;
 
-	drmEventContext evctx = {
+	drmEventContext evctx =
+	{
 		.version = DRM_EVENT_CONTEXT_VERSION,
 		.vblank_handler = 0,
 		.page_flip_handler = page_flip_handler,
 	};
 
-	/* Request a capture buffer from the driver that can be copied to */
-	/* framebuffer */
-	buf[status.main_cam] =
-		v4l2_dequeue_buffer(v4l2_device[status.main_cam]);
-	drmModeAtomicAddProperty(req, drm_device.plane_id[0],
-		drm_device.prop_fbid, buf[status.main_cam]->fb_id);
+	// Request a capture buffer from the driver that can be copied to framebuffer
+	buf[status.main_cam] = v4l2_dequeue_buffer(v4l2_device[status.main_cam]);
+	drmModeAtomicAddProperty(req, drm_device.plane_id[0], drm_device.prop_fbid, buf[status.main_cam]->fb_id);
 
-	if (status.pip==true) {
-		buf[!status.main_cam] =
-			v4l2_dequeue_buffer(v4l2_device[!status.main_cam]);
-		drmModeAtomicAddProperty(req, drm_device.plane_id[1],
-			drm_device.prop_fbid, buf[!status.main_cam]->fb_id);
+	if (status.pip==true)
+	{
+		buf[!status.main_cam] = v4l2_dequeue_buffer(v4l2_device[!status.main_cam]);
+		drmModeAtomicAddProperty(req, drm_device.plane_id[1],drm_device.prop_fbid, buf[!status.main_cam]->fb_id);
+
+		buf[2] = v4l2_dequeue_buffer(v4l2_device[2]);
+		drmModeAtomicAddProperty(req, drm_device.plane_id[2],drm_device.prop_fbid, buf[2]->fb_id);
 	}
 
-	ret = drmModeAtomicCommit(drm_device.fd, req,
-		DRM_MODE_ATOMIC_TEST_ONLY, 0);
+	ret = drmModeAtomicCommit(drm_device.fd, req, DRM_MODE_ATOMIC_TEST_ONLY, 0);
 
-	if(!ret){
-		drmModeAtomicCommit(drm_device.fd, req,
-			DRM_MODE_PAGE_FLIP_EVENT | DRM_MODE_ATOMIC_NONBLOCK, &waiting_for_flip);
-		}
-		else {
+	if(!ret)
+	{
+		drmModeAtomicCommit(drm_device.fd, req, DRM_MODE_PAGE_FLIP_EVENT | DRM_MODE_ATOMIC_NONBLOCK, &waiting_for_flip);
+	}
+	else
+	{
 		ERROR("failed to add plane atomically: %s", strerror(errno));
-		}
+	}
 
 	drmModeAtomicFree(req);
 
-	/* Save jpeg image if triggered */
-	if (status.jpeg==true) {
+	// Save jpeg image if triggered
+	if (status.jpeg==true)
+	{
 		capture_frame(v4l2_device[status.main_cam], buf[status.main_cam]);
 		status.jpeg=false;
 		status.num_jpeg++;
@@ -1210,24 +1228,30 @@ void process_frame(void)
 	FD_ZERO(&fds);
 	FD_SET(drm_device.fd, &fds);
 
-	while (waiting_for_flip) {
+	while (waiting_for_flip)
+	{
 		ret = select(drm_device.fd + 1, &fds, NULL, NULL, NULL);
-		if (ret < 0) {
+		if (ret < 0)
+		{
 			printf("select err: %s\n", strerror(errno));
 			return;
 		}
-		else if (ret == 0) {
+		else if (ret == 0)
+		{
 			printf("select timeout!\n");
 			return;
 		}
-		else if (FD_ISSET(0, &fds)) {
+		else if (FD_ISSET(0, &fds))
+		{
 			continue;
 		}
 		drmHandleEvent(drm_device.fd, &evctx);
 	}
 
 	v4l2_queue_buffer(v4l2_device[status.main_cam], buf[status.main_cam]);
-	if(status.pip == true){
+	if(status.pip == true)
+	{
 		v4l2_queue_buffer(v4l2_device[!status.main_cam], buf[!status.main_cam]);
+		v4l2_queue_buffer(v4l2_device[2], buf[2]);
 	}
 }

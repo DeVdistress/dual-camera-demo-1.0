@@ -21,6 +21,9 @@ private slots:
     void on_switch_2_clicked();
 
     void on_pip_clicked();
+    void on_pip_2_clicked();
+    void on_pip_3_clicked();
+    void on_pip_4_clicked();
 
     void on_exit_clicked();
 

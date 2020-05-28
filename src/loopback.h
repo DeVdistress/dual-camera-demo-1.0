@@ -30,6 +30,9 @@ extern "C" {
 #endif
 
 #define NUM_OF_CAMS 			(4)
+#define MAX_DRM_PLANES 			(5)
+#define MAX_ZORDER_VAL 			(3) //For AM57x device, max zoder value is 3
+#define MAX_NUMBER_OF_OVERLAY	(3) //For AM57x device, max overlay planes value is 3
 
 struct control
 {

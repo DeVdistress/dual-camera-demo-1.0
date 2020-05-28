@@ -44,36 +44,84 @@ ui(new Ui::MainWindow)
 	ui->frame->setStyleSheet("background-color:black;");
 	ui->frame->show();
 
-	ui->frame_pip->setGeometry(25, 25, status.display_xres/3, status.display_yres/3);
-	ui->capture->setGeometry(status.display_xres/2 - 210,
-		status.display_yres - 50,
-		91, 41);
-	ui->switch_2->setGeometry(status.display_xres/2 - 100,
-		status.display_yres - 50,
-		91, 41);
-	ui->pip->setGeometry(status.display_xres/2 + 10,
-		status.display_yres - 50,
-		91, 41);
-	ui->exit->setGeometry(status.display_xres/2 + 120,
-		status.display_yres - 50,
-		91, 41);
+#ifndef PIP_POS_X
+	#define PIP_POS_X  25
+#endif
+#ifndef PIP_POS_Y
+	#define PIP_POS_Y  25
+#endif
 
-	if(status.num_cams == 1) {
-		/* Reconfigure GUI to reflect single camera mode */
+	ui->frame_pip->setGeometry(PIP_POS_X, PIP_POS_Y, status.display_xres/3, status.display_yres/3);
+	ui->frame_pip_2->setGeometry(status.display_xres - status.display_xres/3 - PIP_POS_X, PIP_POS_Y, status.display_xres/3, status.display_yres/3);
+
+	ui->frame_pip_3->setGeometry(PIP_POS_X, status.display_yres/3 + PIP_POS_Y - 2, status.display_xres/3, status.display_yres/3);
+	ui->frame_pip_4->setGeometry(status.display_xres - status.display_xres/3 - PIP_POS_X, status.display_yres/3 + PIP_POS_Y - 2, status.display_xres/3, status.display_yres/3);
+
+#if(1)
+	ui->capture->setGeometry(status.display_xres/2 - 330,
+		status.display_yres - 50,
+		71, 21);
+
+	ui->switch_2->setGeometry(status.display_xres/2 - 230,
+		status.display_yres - 50,
+		71, 21);
+
+	ui->pip->setGeometry(status.display_xres/2 - 130,
+		status.display_yres - 50,
+		71, 21);
+
+	ui->pip_2->setGeometry(status.display_xres/2 - 30,
+		status.display_yres - 50,
+		71, 21);
+
+	ui->pip_3->setGeometry(status.display_xres/2 + 70,
+		status.display_yres - 50,
+		71, 21);
+
+	ui->pip_4->setGeometry(status.display_xres/2 + 170,
+		status.display_yres - 50,
+		71, 21);
+
+	ui->exit->setGeometry(status.display_xres/2 + 270,
+		status.display_yres - 50,
+		71, 21);
+#endif
+
+	if(status.num_cams == 1)
+	{
+		// Reconfigure GUI to reflect single camera mode
 		ui->pip->setHidden(true);
 		ui->pip->setDisabled(true);
+		ui->pip_2->setHidden(true);
+		ui->pip_2->setDisabled(true);
+		ui->pip_3->setHidden(true);
+		ui->pip_3->setDisabled(true);
+		ui->pip_4->setHidden(true);
+		ui->pip_4->setDisabled(true);
 		ui->switch_2->setHidden(true);
 		ui->switch_2->setDisabled(true);
 		ui->frame_pip->setHidden(true);
+
+		// DeVdistress Don't resize
+#if(0)
 		ui->capture->setGeometry(status.display_xres/2 - 100,
 			status.display_yres - 50,
-			91, 41);
+			71, 21);
 		ui->exit->setGeometry(status.display_xres/2 + 10,
 			status.display_yres - 50,
-			91, 41);
+			71, 21);
+#endif
 	}
+	ui->frame_pip_3->setHidden(true);
+	ui->frame_pip_4->setHidden(true);
+	ui->pip_2->setHidden(true);
+	ui->pip_2->setDisabled(true);
+	ui->pip_3->setHidden(true);
+	ui->pip_3->setDisabled(true);
+	ui->pip_4->setHidden(true);
+	ui->pip_4->setDisabled(true);
 
-	/* Start the camera loopback thread */
+	// Start the camera loopback thread
 	loopback->start();
 }
 
@@ -94,7 +142,8 @@ void MainWindow::on_switch_2_clicked()
 	/* hence can cause system crash                                         */
 	drm_resource.lock();
 
-	if (status.num_cams==2){
+	if (status.num_cams > 1)
+	{
 		//switch the main camera by toggleing the main_cam value.
 		status.main_cam = !status.main_cam;
 		set_plane_properties();
@@ -110,14 +159,87 @@ void MainWindow::on_pip_clicked()
 	/* hence can cause system crash                                         */
 	drm_resource.lock();
 
-	if (status.pip==true) {
+	if (status.pip==true)
+	{
 		status.pip=false;
 		drm_disable_pip();
 		ui->frame_pip->setHidden(true);
+		ui->frame_pip_2->setHidden(true);
 	}
-	else {
+	else
+	{
 		drm_enable_pip();
 		ui->frame_pip->setHidden(false);
+		ui->frame_pip_2->setHidden(false);
+		status.pip=true;
+	}
+
+	drm_resource.unlock();
+}
+
+void MainWindow::on_pip_2_clicked()
+{
+	/* While changing the drm display properties, make sure loopback thread */
+	/* isn't running thereby accessing drm properties  simultaneously, and  */
+	/* hence can cause system crash                                         */
+	drm_resource.lock();
+
+	if (status.pip==true)
+	{
+		status.pip=false;
+//		drm_disable_pip_2();
+		ui->frame_pip_2->setHidden(true);
+	}
+	else
+	{
+//		drm_enable_pip_2();
+		ui->frame_pip_2->setHidden(false);
+		status.pip=true;
+	}
+
+	drm_resource.unlock();
+}
+
+void MainWindow::on_pip_3_clicked()
+{
+	/* While changing the drm display properties, make sure loopback thread */
+	/* isn't running thereby accessing drm properties  simultaneously, and  */
+	/* hence can cause system crash                                         */
+	drm_resource.lock();
+
+	if (status.pip==true)
+	{
+		status.pip=false;
+//		drm_disable_pip_3();
+		ui->frame_pip_3->setHidden(true);
+	}
+	else
+	{
+//		drm_enable_pip_3();
+		ui->frame_pip_3->setHidden(false);
+		status.pip=true;
+	}
+
+	drm_resource.unlock();
+}
+
+void MainWindow::on_pip_4_clicked()
+{
+	/* While changing the drm display properties, make sure loopback thread */
+	/* isn't running thereby accessing drm properties  simultaneously, and  */
+	/* hence can cause system crash                                         */
+	drm_resource.lock();
+
+	if (status.pip==true)
+	{
+		status.pip=false;
+//		drm_disable_pip_4();
+		ui->frame_pip_4->setHidden(true);
+	}
+	else
+	{
+//		drm_enable_pip_4();
+		ui->frame_pip_4->setHidden(false);
 		status.pip=true;
 	}
 
@@ -131,9 +253,11 @@ void MainWindow::on_exit_clicked()
 	this->close();
 }
 
-void MyThread::run() {
+void MyThread::run()
+{
 
-	while(status.exit == false) {
+	while(status.exit == false)
+	{
 		drm_resource.lock();
 		process_frame();
 		drm_resource.unlock();	
